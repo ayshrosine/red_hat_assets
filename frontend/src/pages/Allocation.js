@@ -49,7 +49,7 @@ export default function Allocation() {
             await api.post("/allocations", {
                 asset_id: form.asset_id,
                 assignee_user_id: form.assignee_user_id,
-                expected_return: form.expected_return || null,
+                expected_return: form.expected_return ? new Date(form.expected_return + "T23:59:59").toISOString() : null,
                 notes: form.notes,
             });
             toast.success("Asset allocated");
@@ -197,7 +197,7 @@ export default function Allocation() {
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs">Expected return</Label>
-                            <Input data-testid={ALLOC.expectedReturn} type="date" value={form.expected_return} onChange={(e) => setForm((f) => ({ ...f, expected_return: e.target.value ? new Date(e.target.value).toISOString() : "" }))} />
+                            <Input data-testid={ALLOC.expectedReturn} type="date" value={form.expected_return} onChange={(e) => setForm((f) => ({ ...f, expected_return: e.target.value }))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs">Notes</Label>

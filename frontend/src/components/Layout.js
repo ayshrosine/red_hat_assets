@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
     LayoutDashboard, Building2, Boxes, ArrowLeftRight, CalendarDays,
-    Wrench, ClipboardCheck, BarChart3, Bell, LogOut, Search, ChevronDown, User,
+    Wrench, ClipboardCheck, BarChart3, Bell, LogOut, Search, ChevronDown, User, Menu, X,
 } from "lucide-react";
 import { useAuth, roleLabel, hasRole } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -28,6 +28,20 @@ export default function Layout({ children }) {
     const { user, logout } = useAuth();
     const nav = useNavigate();
     const loc = useLocation();
+    const [mobileOpen, setMobileOpen] = useState(false);
+
+    // Close mobile sidebar on route change
+    useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
+
+    // Lock body scroll when mobile menu open
+    useEffect(() => {
+        if (mobileOpen) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+        }
+        return () => { document.body.style.overflow = ""; };
+    }, [mobileOpen]);
 
     const initials = (user?.name || user?.email || "?")
         .split(" ")
@@ -38,17 +52,36 @@ export default function Layout({ children }) {
 
     return (
         <div className="min-h-screen grain flex" style={{ background: "var(--af-bg)" }}>
-            {/* Sidebar */}
+            {/* Mobile backdrop */}
+            {mobileOpen && (
+                <div
+                    onClick={() => setMobileOpen(false)}
+                    className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
+                    data-testid="mobile-sidebar-backdrop"
+                />
+            )}
+
+            {/* Sidebar (drawer on mobile, fixed on md+) */}
             <aside
-                className="fixed inset-y-0 left-0 w-64 border-r flex-col hidden md:flex z-30"
+                className={`fixed inset-y-0 left-0 w-64 border-r flex-col z-50 md:z-30 transform transition-transform duration-200 flex ${
+                    mobileOpen ? "translate-x-0" : "-translate-x-full"
+                } md:translate-x-0`}
                 style={{ background: "var(--af-sidebar)", borderColor: "var(--af-border)" }}
                 data-testid="app-sidebar"
             >
-                <div className="h-16 px-6 flex items-center border-b" style={{ borderColor: "var(--af-border)" }}>
+                <div className="h-16 px-6 flex items-center justify-between border-b" style={{ borderColor: "var(--af-border)" }}>
                     <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-md" style={{ background: "linear-gradient(135deg,#00FF94,#00E5FF)" }} />
                         <span className="font-display text-lg font-medium tracking-tight">AssetFlow</span>
                     </div>
+                    <button
+                        onClick={() => setMobileOpen(false)}
+                        className="md:hidden w-8 h-8 rounded-md hover:bg-white/[0.06] flex items-center justify-center"
+                        data-testid="mobile-sidebar-close"
+                        aria-label="Close menu"
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
 
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
@@ -102,14 +135,30 @@ export default function Layout({ children }) {
                 </div>
             </aside>
 
-            {/* Main */}
-            <div className="flex-1 md:ml-64 flex flex-col min-h-screen relative">
+            {/* Main content column */}
+            <div className="flex-1 md:ml-64 flex flex-col min-h-screen relative w-full">
                 {/* Topbar */}
                 <header
-                    className="sticky top-0 z-20 h-16 border-b flex items-center gap-4 px-6 backdrop-blur-xl"
+                    className="sticky top-0 z-20 h-16 border-b flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 backdrop-blur-xl"
                     style={{ background: "rgba(5,5,5,0.65)", borderColor: "var(--af-border)" }}
                 >
-                    <div className="flex-1 max-w-md">
+                    {/* Mobile hamburger */}
+                    <button
+                        onClick={() => setMobileOpen(true)}
+                        className="md:hidden w-9 h-9 rounded-md border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] flex items-center justify-center flex-shrink-0"
+                        data-testid="mobile-menu-toggle"
+                        aria-label="Open menu"
+                    >
+                        <Menu size={16} />
+                    </button>
+
+                    {/* Mobile brand (when sidebar hidden) */}
+                    <div className="md:hidden flex items-center gap-2 flex-shrink-0">
+                        <div className="w-6 h-6 rounded-md" style={{ background: "linear-gradient(135deg,#00FF94,#00E5FF)" }} />
+                        <span className="font-display text-base font-medium tracking-tight">AssetFlow</span>
+                    </div>
+
+                    <div className="flex-1 max-w-md hidden sm:block">
                         <div className="relative">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                             <Input
@@ -122,14 +171,17 @@ export default function Layout({ children }) {
                                     }
                                 }}
                             />
-                            <kbd className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 items-center gap-1 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/50">⌘K</kbd>
+                            <kbd className="hidden lg:flex absolute right-3 top-1/2 -translate-y-1/2 items-center gap-1 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/50">⌘K</kbd>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex-1 sm:hidden" />
+
+                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                         <button
                             className="relative w-9 h-9 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] flex items-center justify-center transition-colors"
                             onClick={() => nav("/notifications")}
                             data-testid="notifications-bell"
+                            aria-label="Notifications"
                         >
                             <Bell size={16} strokeWidth={1.5} />
                         </button>
@@ -137,11 +189,11 @@ export default function Layout({ children }) {
                             <DropdownMenuTrigger asChild>
                                 <button
                                     data-testid="user-menu-trigger"
-                                    className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-colors"
+                                    className="flex items-center gap-2 rounded-full pl-2 pr-2 sm:pr-3 py-1.5 border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-colors"
                                 >
                                     <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[10px]">{initials}</div>
-                                    <span className="text-sm max-w-[140px] truncate">{user?.name}</span>
-                                    <ChevronDown size={14} className="text-white/50" />
+                                    <span className="text-sm max-w-[120px] truncate hidden sm:inline">{user?.name}</span>
+                                    <ChevronDown size={14} className="text-white/50 hidden sm:inline" />
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 bg-[#0e0e0e] border-white/10">
@@ -165,7 +217,7 @@ export default function Layout({ children }) {
                     </div>
                 </header>
 
-                <main key={loc.pathname} className="flex-1 p-6 lg:p-8 max-w-[1600px] w-full mx-auto af-fade-in">
+                <main key={loc.pathname} className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto af-fade-in">
                     {children}
                 </main>
             </div>
