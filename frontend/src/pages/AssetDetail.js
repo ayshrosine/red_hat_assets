@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import StatusPill from "@/components/StatusPill";
-import { ArrowLeft, MapPin, Tag as TagIcon, Package, ExternalLink } from "lucide-react";
+import { AuthedImage } from "@/components/FileUploader";
+import { ArrowLeft, MapPin, Tag as TagIcon, Package, ExternalLink, FileText } from "lucide-react";
 
 export default function AssetDetail() {
     const { assetId } = useParams();
@@ -55,6 +56,26 @@ export default function AssetDetail() {
                                 {asset.notes && <p className="mt-4 text-sm text-white/60">{asset.notes}</p>}
                             </div>
                         </div>
+                        {asset.photo_urls?.length > 0 && (
+                            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2" data-testid="asset-photo-gallery">
+                                {asset.photo_urls.map((url, i) => (
+                                    <div key={i} className="aspect-square rounded-lg border border-white/10 overflow-hidden bg-black">
+                                        <AuthedImage src={url} alt={`Photo ${i + 1}`} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {asset.doc_urls?.length > 0 && (
+                            <div className="mt-4 space-y-1" data-testid="asset-docs">
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-white/40 mb-2">Documents</p>
+                                {asset.doc_urls.map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-white/70 hover:text-white p-2 rounded border border-white/5 hover:border-white/15 bg-white/[0.02]">
+                                        <FileText size={14} /> Document {i + 1}
+                                        <ExternalLink size={11} className="ml-auto text-white/40" />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <Section title="Allocation history">

@@ -9,6 +9,7 @@ import os
 import uuid
 import logging
 import secrets
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Literal
 
@@ -16,10 +17,15 @@ import bcrypt
 import jwt
 import httpx
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, status
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.responses import Response as FastAPIResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+from storage import init_storage, put_object, get_object, build_path
+from emailer import send_email, overdue_email_html
+from scheduler import overdue_reminder_loop, run_overdue_check_now
 
 # ---------- Config ----------
 MONGO_URL = os.environ["MONGO_URL"]
@@ -237,6 +243,8 @@ class AssetIn(BaseModel):
     acquisition_cost: Optional[float] = 0
     bookable: bool = False
     photo_url: Optional[str] = ""
+    photo_urls: List[str] = []
+    doc_urls: List[str] = []
     notes: Optional[str] = ""
     custom_data: dict = {}
 
@@ -903,6 +911,227 @@ async def mark_all_read(user: dict = Depends(get_current_user)):
 
 
 # ============================================================
+# FILE UPLOADS (Emergent object storage)
+# ============================================================
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"}
+
+
+@api.post("/uploads")
+async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    ctype = file.content_type or "application/octet-stream"
+    if ctype not in ALLOWED_MIME:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ctype}")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+    path = build_path(user["user_id"], file.filename or "upload", ctype)
+    try:
+        result = await asyncio.to_thread(put_object, path, data, ctype)
+    except Exception as e:
+        log.exception("Upload failed: %s", e)
+        raise HTTPException(status_code=500, detail="Storage upload failed")
+    file_id = new_id("fil")
+    await db.files.insert_one({
+        "file_id": file_id,
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": ctype,
+        "size": result.get("size", len(data)),
+        "uploaded_by": user["user_id"],
+        "is_deleted": False,
+        "created_at": iso(now_utc()),
+    })
+    return {
+        "file_id": file_id,
+        "url": f"/api/uploads/{file_id}",
+        "content_type": ctype,
+        "size": result.get("size", len(data)),
+        "filename": file.filename,
+    }
+
+
+@api.get("/uploads/{file_id}")
+async def download_file(file_id: str, request: Request, auth: Optional[str] = None):
+    """Download a file. Auth via httpOnly cookie (preferred) or ?auth=<jwt> query param
+    for <img src> tags that can't send Authorization headers."""
+    user = None
+    # Try cookie/bearer via standard helper
+    try:
+        user = await get_current_user(request)
+    except HTTPException:
+        pass
+    # Fallback: JWT via query param
+    if not user and auth:
+        try:
+            payload = jwt.decode(auth, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            if payload.get("type") == "access":
+                user = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        except jwt.PyJWTError:
+            pass
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    rec = await db.files.find_one({"file_id": file_id, "is_deleted": False}, {"_id": 0})
+    if not rec:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        content, ctype = await asyncio.to_thread(get_object, rec["storage_path"])
+    except Exception as e:
+        log.exception("Download failed: %s", e)
+        raise HTTPException(status_code=500, detail="Storage download failed")
+    return FastAPIResponse(content=content, media_type=rec.get("content_type", ctype))
+
+
+# ============================================================
+# AUDIT CYCLES
+# ============================================================
+class AuditCycleIn(BaseModel):
+    name: str
+    department_id: Optional[str] = None
+    location: Optional[str] = ""
+    start_date: str  # ISO date
+    end_date: str
+    auditor_ids: List[str] = []
+
+
+class AuditItemMark(BaseModel):
+    result: Literal["verified", "missing", "damaged"]
+    notes: Optional[str] = ""
+
+
+@api.post("/audit/cycles")
+async def create_audit_cycle(payload: AuditCycleIn, user: dict = Depends(require_roles("admin", "asset_manager"))):
+    cycle_id = new_id("adt")
+    # snapshot in-scope assets
+    query: dict = {"status": {"$nin": ["disposed", "retired"]}}
+    if payload.department_id:
+        query["department_id"] = payload.department_id
+    if payload.location:
+        query["location"] = {"$regex": payload.location, "$options": "i"}
+    assets = await db.assets.find(query, {"_id": 0}).to_list(2000)
+    cycle_doc = {
+        "cycle_id": cycle_id,
+        "name": payload.name,
+        "department_id": payload.department_id,
+        "location": payload.location,
+        "start_date": payload.start_date,
+        "end_date": payload.end_date,
+        "auditor_ids": payload.auditor_ids,
+        "status": "in_progress",  # in_progress | closed
+        "asset_count": len(assets),
+        "created_by": user["user_id"],
+        "created_at": iso(now_utc()),
+        "closed_at": None,
+    }
+    await db.audit_cycles.insert_one(cycle_doc)
+    if assets:
+        items = [{
+            "item_id": new_id("adi"),
+            "cycle_id": cycle_id,
+            "asset_id": a["asset_id"],
+            "asset_tag": a["tag"],
+            "asset_name": a["name"],
+            "expected_location": a.get("location", ""),
+            "result": None,  # pending | verified | missing | damaged
+            "notes": "",
+            "marked_by": None,
+            "marked_at": None,
+        } for a in assets]
+        await db.audit_items.insert_many(items)
+    await log_activity(user, "created_audit", "audit", cycle_id, payload.name)
+    for aid in payload.auditor_ids:
+        await add_notification(aid, "audit_assigned", f"You've been assigned to audit: {payload.name}", "")
+    return {k: v for k, v in cycle_doc.items() if k != "_id"}
+
+
+@api.get("/audit/cycles")
+async def list_audit_cycles(_: dict = Depends(get_current_user)):
+    cycles = await db.audit_cycles.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # attach quick counts
+    for c in cycles:
+        pipeline = [
+            {"$match": {"cycle_id": c["cycle_id"]}},
+            {"$group": {"_id": "$result", "count": {"$sum": 1}}},
+        ]
+        counts = {"verified": 0, "missing": 0, "damaged": 0, "pending": 0}
+        async for row in db.audit_items.aggregate(pipeline):
+            key = row["_id"] or "pending"
+            counts[key] = row["count"]
+        c["counts"] = counts
+    return cycles
+
+
+@api.get("/audit/cycles/{cycle_id}")
+async def get_audit_cycle(cycle_id: str, _: dict = Depends(get_current_user)):
+    cycle = await db.audit_cycles.find_one({"cycle_id": cycle_id}, {"_id": 0})
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found")
+    items = await db.audit_items.find({"cycle_id": cycle_id}, {"_id": 0}).to_list(2000)
+    return {"cycle": cycle, "items": items}
+
+
+@api.post("/audit/items/{item_id}/mark")
+async def mark_audit_item(item_id: str, payload: AuditItemMark, user: dict = Depends(get_current_user)):
+    item = await db.audit_items.find_one({"item_id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    cycle = await db.audit_cycles.find_one({"cycle_id": item["cycle_id"]}, {"_id": 0})
+    if cycle["status"] == "closed":
+        raise HTTPException(status_code=400, detail="Cycle already closed")
+    # RBAC: auditor assigned OR admin/asset_manager
+    is_privileged = user["role"] in ("admin", "asset_manager")
+    if not is_privileged and user["user_id"] not in cycle.get("auditor_ids", []):
+        raise HTTPException(status_code=403, detail="Not assigned to this audit")
+    await db.audit_items.update_one(
+        {"item_id": item_id},
+        {"$set": {
+            "result": payload.result,
+            "notes": payload.notes,
+            "marked_by": user["user_id"],
+            "marked_at": iso(now_utc()),
+        }},
+    )
+    return {"ok": True}
+
+
+@api.post("/audit/cycles/{cycle_id}/close")
+async def close_audit_cycle(cycle_id: str, user: dict = Depends(require_roles("admin", "asset_manager"))):
+    cycle = await db.audit_cycles.find_one({"cycle_id": cycle_id})
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found")
+    if cycle["status"] == "closed":
+        return {"ok": True, "message": "Already closed"}
+    items = await db.audit_items.find({"cycle_id": cycle_id}, {"_id": 0}).to_list(2000)
+    missing_ids = [i["asset_id"] for i in items if i.get("result") == "missing"]
+    damaged_ids = [i["asset_id"] for i in items if i.get("result") == "damaged"]
+    if missing_ids:
+        await db.assets.update_many({"asset_id": {"$in": missing_ids}}, {"$set": {"status": "lost"}})
+    if damaged_ids:
+        await db.assets.update_many({"asset_id": {"$in": damaged_ids}}, {"$set": {"status": "under_maintenance"}})
+    await db.audit_cycles.update_one(
+        {"cycle_id": cycle_id},
+        {"$set": {"status": "closed", "closed_at": iso(now_utc()), "closed_by": user["user_id"]}},
+    )
+    await log_activity(user, "closed_audit", "audit", cycle_id, cycle["name"], {
+        "missing": len(missing_ids), "damaged": len(damaged_ids),
+    })
+    return {
+        "ok": True,
+        "missing_updated": len(missing_ids),
+        "damaged_updated": len(damaged_ids),
+    }
+
+
+# ============================================================
+# OVERDUE REMINDER (manual trigger)
+# ============================================================
+@api.post("/overdue/check")
+async def trigger_overdue_check(user: dict = Depends(require_roles("admin", "asset_manager"))):
+    await run_overdue_check_now(db, add_notification, send_email, overdue_email_html)
+    return {"ok": True, "message": "Overdue check completed. See logs & notifications."}
+
+
+# ============================================================
 # STARTUP / SEED
 # ============================================================
 async def seed_data():
@@ -1012,6 +1241,15 @@ async def on_startup():
         await seed_data()
     except Exception as e:
         log.exception("Seed failed: %s", e)
+    # init object storage (best-effort)
+    try:
+        await asyncio.to_thread(init_storage)
+        log.info("Object storage initialized")
+    except Exception as e:
+        log.warning("Object storage init failed (uploads will 500): %s", e)
+    # kick off overdue reminder background loop
+    asyncio.create_task(overdue_reminder_loop(db, add_notification, send_email, overdue_email_html, interval_seconds=3600))
+    log.info("Overdue reminder loop scheduled (hourly)")
 
 
 @app.on_event("shutdown")

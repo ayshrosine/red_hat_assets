@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useAuth, hasRole } from "@/context/AuthContext";
 import { Plus, Search, ChevronRight } from "lucide-react";
+import FileUploader from "@/components/FileUploader";
 
 const STATUS_OPTIONS = ["available", "allocated", "reserved", "under_maintenance", "lost", "retired", "disposed"];
 
@@ -139,6 +140,8 @@ function RegisterDialog({ open, onOpenChange, cats, depts, onCreated }) {
         location: "", condition: "good", acquisition_cost: 0, acquisition_date: "",
         bookable: false, photo_url: "", notes: "",
     });
+    const [photos, setPhotos] = useState([]); // uploaded files
+    const [docs, setDocs] = useState([]);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
     const submit = async () => {
@@ -149,11 +152,14 @@ function RegisterDialog({ open, onOpenChange, cats, depts, onCreated }) {
                 department_id: form.department_id || null,
                 acquisition_cost: Number(form.acquisition_cost) || 0,
                 acquisition_date: form.acquisition_date || null,
+                photo_urls: photos.map((p) => p.url),
+                doc_urls: docs.map((d) => d.url),
                 custom_data: {},
             });
             toast.success("Asset registered");
             onOpenChange(false);
             setForm({ name: "", tag: "", serial: "", category_id: "", department_id: "", location: "", condition: "good", acquisition_cost: 0, acquisition_date: "", bookable: false, photo_url: "", notes: "" });
+            setPhotos([]); setDocs([]);
             onCreated();
         } catch (e) { toast.error(formatApiError(e)); }
     };
