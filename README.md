@@ -6,6 +6,8 @@ Covers: organization setup, asset lifecycle tracking, allocation/transfer with c
 
 Out of scope: purchasing, invoicing, and accounting. (Acquisition Cost is stored for reporting only.)
 
+Live On :- https://deploy-launch-10.emergent.host
+
 ---
 
 ## Tech Stack
