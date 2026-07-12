@@ -224,6 +224,12 @@ function RegisterDialog({ open, onOpenChange, cats, depts, onCreated }) {
                     <Field label="Photo URL (optional)">
                         <Input value={form.photo_url} onChange={(e) => set("photo_url", e.target.value)} placeholder="https://…" />
                     </Field>
+                    <Field label="Photos (upload)">
+                        <FileUploader value={photos} onChange={setPhotos} accept="image/*" multiple testId="assets-photo-uploader" label="Upload photos" />
+                    </Field>
+                    <Field label="Documents (PDF)">
+                        <FileUploader value={docs} onChange={setDocs} accept="application/pdf" multiple testId="assets-doc-uploader" label="Upload PDFs" />
+                    </Field>
                     <Field label="Notes">
                         <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} />
                     </Field>

@@ -1001,6 +1001,9 @@ class AuditItemMark(BaseModel):
 
 @api.post("/audit/cycles")
 async def create_audit_cycle(payload: AuditCycleIn, user: dict = Depends(require_roles("admin", "asset_manager"))):
+    # Basic date sanity
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
     cycle_id = new_id("adt")
     # snapshot in-scope assets
     query: dict = {"status": {"$nin": ["disposed", "retired"]}}
@@ -1100,7 +1103,7 @@ async def close_audit_cycle(cycle_id: str, user: dict = Depends(require_roles("a
     if not cycle:
         raise HTTPException(status_code=404, detail="Cycle not found")
     if cycle["status"] == "closed":
-        return {"ok": True, "message": "Already closed"}
+        return {"ok": True, "message": "Already closed", "missing_updated": 0, "damaged_updated": 0}
     items = await db.audit_items.find({"cycle_id": cycle_id}, {"_id": 0}).to_list(2000)
     missing_ids = [i["asset_id"] for i in items if i.get("result") == "missing"]
     damaged_ids = [i["asset_id"] for i in items if i.get("result") == "damaged"]
