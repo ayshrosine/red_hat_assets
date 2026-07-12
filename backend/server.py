@@ -310,7 +310,7 @@ async def register(payload: RegisterIn, response: Response):
 @api.post("/auth/login")
 async def login(payload: LoginIn, response: Response, request: Request):
     email = payload.email.lower().strip()
-    ident = f"{request.client.host if request.client else 'unknown'}:{email}"
+    ident = email  # key on email only — k8s ingress makes per-IP tracking unreliable
     # brute force check
     attempt = await db.login_attempts.find_one({"identifier": ident})
     if attempt and attempt.get("count", 0) >= 5:
@@ -323,11 +323,12 @@ async def login(payload: LoginIn, response: Response, request: Request):
                 raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash") or not verify_password(payload.password, user["password_hash"]):
-        await db.login_attempts.update_one(
-            {"identifier": ident},
-            {"$inc": {"count": 1}, "$set": {"locked_until": iso(now_utc() + timedelta(minutes=15))}},
-            upsert=True,
-        )
+        new_count = (attempt.get("count", 0) if attempt else 0) + 1
+        update = {"$set": {"count": new_count}}
+        # only stamp locked_until when we cross the threshold, not on every failure
+        if new_count >= 5:
+            update["$set"]["locked_until"] = iso(now_utc() + timedelta(minutes=15))
+        await db.login_attempts.update_one({"identifier": ident}, update, upsert=True)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     await db.login_attempts.delete_one({"identifier": ident})
     access = create_access_token(user["user_id"], email)
@@ -1026,10 +1027,20 @@ async def health():
 
 app.include_router(api)
 
+_frontend_url = os.environ.get("FRONTEND_URL", "").strip()
+_cors_env = os.environ.get("CORS_ORIGINS", "*").strip()
+if _cors_env == "*":
+    # Credentials + wildcard is invalid; whitelist just the frontend origin.
+    _allow_origins = [_frontend_url] if _frontend_url else ["*"]
+    _allow_credentials = bool(_frontend_url)
+else:
+    _allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"] if os.environ.get("CORS_ORIGINS", "*") == "*" else os.environ.get("CORS_ORIGINS", "").split(","),
+    allow_credentials=_allow_credentials,
+    allow_origins=_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
