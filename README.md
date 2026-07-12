@@ -192,18 +192,6 @@ Automatically created by `backend/seed.py` on backend startup (works in both pre
 
 ---
 
-## Deployment (Vercel)
-
-Deployed as **two separate Vercel projects**:
-
-**Backend** — Root Directory: `backend`, framework: FastAPI (Python), entrypoint `server:app`. Set `MONGO_URL`, `DB_NAME`, `CORS_ORIGINS`, and email vars in Project Settings → Environment Variables.
-
-**Frontend** — Root Directory: `frontend`, Build Command `yarn build`, Output Directory `build`, Install Command `yarn install`. Set `REACT_APP_BACKEND_URL` to the deployed backend's URL.
-
-After deploying, set the backend's `CORS_ORIGINS` to the frontend's live URL and redeploy the backend.
-
----
-
 ## Known Issues
 
 - **`scheduler.py`'s `overdue_reminder_loop`** runs as an in-process background loop, which does not persist on serverless platforms like Vercel (functions don't stay alive between requests). For production, convert this to a scheduled HTTP endpoint triggered by a cron job (e.g. Vercel Cron) instead of an in-process `asyncio` loop.
