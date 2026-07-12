@@ -52,6 +52,7 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
     path = build_path(user["user_id"], file.filename or "upload", ctype)
+    result: dict = {}
     try:
         result = await asyncio.to_thread(put_object, path, data, ctype)
     except Exception as e:
@@ -99,6 +100,8 @@ async def download_file(file_id: str, request: Request, token: Optional[str] = N
     rec = await db.files.find_one({"file_id": file_id, "is_deleted": False}, {"_id": 0})
     if not rec:
         raise HTTPException(status_code=404, detail="File not found")
+    content: bytes = b""
+    ctype: str = "application/octet-stream"
     try:
         content, ctype = await asyncio.to_thread(get_object, rec["storage_path"])
     except Exception as e:

@@ -96,12 +96,17 @@ export function AuthedImage({ src, alt, className }) {
             try {
                 const abs = src.startsWith("http") ? src : `${API.replace(/\/api$/, "")}${src}`;
                 const res = await fetch(abs, { credentials: "include" });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    console.warn(`AuthedImage: fetch ${abs} returned ${res.status}`);
+                    return;
+                }
                 const b = await res.blob();
                 if (revoked) return;
                 url = URL.createObjectURL(b);
                 setBlob(url);
-            } catch { /* ignore */ }
+            } catch (err) {
+                console.warn("AuthedImage load failed:", err?.message || err);
+            }
         })();
         return () => { revoked = true; if (url) URL.revokeObjectURL(url); };
     }, [src]);

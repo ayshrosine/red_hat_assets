@@ -186,8 +186,8 @@ function SkeletonDash() {
         <div className="space-y-6 animate-pulse">
             <div className="h-10 w-64 bg-white/5 rounded" />
             <div className="grid grid-cols-6 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="h-24 rounded-xl bg-white/5" />
+                {["s0", "s1", "s2", "s3", "s4", "s5"].map((k) => (
+                    <div key={k} className="h-24 rounded-xl bg-white/5" />
                 ))}
             </div>
             <div className="h-64 rounded-xl bg-white/5" />

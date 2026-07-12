@@ -49,8 +49,6 @@ export default function Assets() {
             setCats(c.data); setDepts(d.data);
         })();
     }, []);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(); }, [q, fCat, fStatus, fDept]);
 
     return (

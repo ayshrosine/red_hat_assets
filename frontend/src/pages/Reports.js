@@ -146,7 +146,7 @@ export default function Reports() {
                         <ResponsiveContainer width="100%" height={260}>
                             <PieChart>
                                 <Pie data={statusDist} dataKey="count" nameKey="status" innerRadius={60} outerRadius={100} paddingAngle={2}>
-                                    {statusDist.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="#0e0e0e" strokeWidth={2} />)}
+                                    {statusDist.map((entry, i) => <Cell key={entry.status} fill={COLORS[i % COLORS.length]} stroke="#0e0e0e" strokeWidth={2} />)}
                                 </Pie>
                                 <Tooltip contentStyle={{ background: "#0e0e0e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
                             </PieChart>
@@ -218,7 +218,7 @@ export default function Reports() {
                                         const intensity = v / maxHeat;
                                         return (
                                             <div
-                                                key={hi}
+                                                key={`${day}-${h}`}
                                                 className="aspect-square rounded"
                                                 style={{
                                                     background: v > 0 ? `rgba(0, 255, 148, ${0.15 + intensity * 0.75})` : "rgba(255, 255, 255, 0.02)",

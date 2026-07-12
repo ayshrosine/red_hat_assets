@@ -42,6 +42,7 @@ export default function Booking() {
             setAssets(data);
             if (!selected && data.length) setSelected(data[0].asset_id);
         })();
+    // one-shot mount load; `selected` is only used to skip auto-select
     }, []);
 
     useEffect(() => {

@@ -58,9 +58,9 @@ export default function AssetDetail() {
                         </div>
                         {asset.photo_urls?.length > 0 && (
                             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2" data-testid="asset-photo-gallery">
-                                {asset.photo_urls.map((url, i) => (
-                                    <div key={i} className="aspect-square rounded-lg border border-white/10 overflow-hidden bg-black">
-                                        <AuthedImage src={url} alt={`Photo ${i + 1}`} />
+                                {asset.photo_urls.map((url) => (
+                                    <div key={url} className="aspect-square rounded-lg border border-white/10 overflow-hidden bg-black">
+                                        <AuthedImage src={url} alt="Asset photo" />
                                     </div>
                                 ))}
                             </div>
@@ -68,9 +68,9 @@ export default function AssetDetail() {
                         {asset.doc_urls?.length > 0 && (
                             <div className="mt-4 space-y-1" data-testid="asset-docs">
                                 <p className="text-[10px] uppercase tracking-[0.18em] text-white/40 mb-2">Documents</p>
-                                {asset.doc_urls.map((url, i) => (
-                                    <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-white/70 hover:text-white p-2 rounded border border-white/5 hover:border-white/15 bg-white/[0.02]">
-                                        <FileText size={14} /> Document {i + 1}
+                                {asset.doc_urls.map((url) => (
+                                    <a key={url} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-white/70 hover:text-white p-2 rounded border border-white/5 hover:border-white/15 bg-white/[0.02]">
+                                        <FileText size={14} /> {url.split("/").pop() || "Document"}
                                         <ExternalLink size={11} className="ml-auto text-white/40" />
                                     </a>
                                 ))}

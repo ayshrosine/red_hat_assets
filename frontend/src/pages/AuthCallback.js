@@ -25,16 +25,17 @@ export default function AuthCallback() {
             try {
                 const { data } = await api.post("/auth/google/session", { session_id: sessionId });
                 setUser(data);
-                // clean up hash
                 window.history.replaceState(null, "", window.location.pathname);
                 toast.success(`Welcome, ${data.name || data.email}`);
                 nav("/dashboard", { replace: true });
             } catch (e) {
+                console.warn("Google session exchange failed:", e?.message || e);
                 toast.error("Google sign-in failed");
                 nav("/login", { replace: true });
             }
         })();
-    }, [nav, setUser]);
+    // one-shot effect at mount — external deps (api, setUser, nav) are stable
+    }, []);
 
     return (
         <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--af-bg)" }}>
