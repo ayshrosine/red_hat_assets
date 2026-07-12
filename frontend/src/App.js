@@ -1,56 +1,85 @@
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Toaster } from "sonner";
+import Layout from "@/components/Layout";
+import LoginPage from "@/pages/Login";
+import AuthCallback from "@/pages/AuthCallback";
+import Dashboard from "@/pages/Dashboard";
+import OrgSetup from "@/pages/OrgSetup";
+import Assets from "@/pages/Assets";
+import AssetDetail from "@/pages/AssetDetail";
+import Allocation from "@/pages/Allocation";
+import Booking from "@/pages/Booking";
+import Maintenance from "@/pages/Maintenance";
+import Audit from "@/pages/Audit";
+import Reports from "@/pages/Reports";
+import Notifications from "@/pages/Notifications";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
-  );
+function Protected({ children, roles }) {
+    const { user, loading } = useAuth();
+    if (loading) return <LoadingSplash />;
+    if (!user) return <Navigate to="/login" replace />;
+    if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+    return <Layout>{children}</Layout>;
 }
 
-export default App;
+function LoadingSplash() {
+    return (
+        <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--af-bg)" }}>
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-10 h-10 rounded-lg animate-pulse" style={{ background: "linear-gradient(135deg,#00FF94,#00E5FF)" }} />
+                <p className="text-sm text-white/40 tracking-wide">Loading AssetFlow…</p>
+            </div>
+        </div>
+    );
+}
+
+function AppRouter() {
+    const loc = useLocation();
+    // Synchronous session_id detection to avoid race with checkAuth
+    if (loc.hash?.includes("session_id=")) {
+        return <AuthCallback />;
+    }
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/organization" element={<Protected roles={["admin"]}><OrgSetup /></Protected>} />
+            <Route path="/assets" element={<Protected><Assets /></Protected>} />
+            <Route path="/assets/:assetId" element={<Protected><AssetDetail /></Protected>} />
+            <Route path="/allocation" element={<Protected><Allocation /></Protected>} />
+            <Route path="/booking" element={<Protected><Booking /></Protected>} />
+            <Route path="/maintenance" element={<Protected><Maintenance /></Protected>} />
+            <Route path="/audit" element={<Protected roles={["admin", "asset_manager"]}><Audit /></Protected>} />
+            <Route path="/reports" element={<Protected roles={["admin", "asset_manager"]}><Reports /></Protected>} />
+            <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+    );
+}
+
+export default function App() {
+    return (
+        <div className="App">
+            <BrowserRouter>
+                <AuthProvider>
+                    <AppRouter />
+                    <Toaster
+                        theme="dark"
+                        position="top-right"
+                        toastOptions={{
+                            style: {
+                                background: "#0e0e0e",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                color: "#fff",
+                            },
+                        }}
+                    />
+                </AuthProvider>
+            </BrowserRouter>
+        </div>
+    );
+}
