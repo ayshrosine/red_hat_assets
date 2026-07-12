@@ -1,75 +1,63 @@
 # AssetFlow — PRD & Build Log
 
 ## Original Problem Statement
-Enterprise Asset & Resource Management Web App (React + FastAPI + MongoDB). Centralized ERP-style platform to track, allocate, book, maintain, and audit physical assets and shared resources. Excludes purchasing, invoicing, accounting.
+Enterprise Asset & Resource Management Web App (React + FastAPI + MongoDB). Centralized ERP for tracking, allocating, booking, maintaining, and auditing physical assets. Excludes purchasing, invoicing, accounting.
 
-## User Choices
-- Auth: **Both** JWT + Emergent Google OAuth
-- File storage: Emergent object storage
-- Seed data: yes
-- Design: inspired by wope.com — dark editorial with neon accents
-- Overdue reminders: in-app + Resend email
-- PDF export: client-side (jsPDF + html2canvas)
+## Architecture (as of iteration 4)
 
-## Architecture
-- **Backend:** FastAPI single-file `server.py` + helper modules (`storage.py`, `emailer.py`, `scheduler.py`). JWT httpOnly cookies + Emergent Google OAuth session cookies. bcrypt + brute-force lockout keyed by email. RBAC middleware. MongoDB via motor. Background asyncio scheduler for overdue reminders (hourly, in-memory per-day dedupe).
-- **Frontend:** React 19 + Tailwind + shadcn/ui. Cabinet Grotesk (display) + Satoshi (body). AuthProvider context, protected Layout, StatusPill, FileUploader with AuthedImage (blob URL via cookie-authed fetch). Sonner toasts. Recharts + jsPDF/html2canvas for PDF export.
+### Backend — modular `routers/*.py`
+```
+/app/backend/
+├── server.py          # Thin bootstrap: mounts /api, CORS, startup (seed, storage, scheduler)
+├── deps.py            # Shared: db, JWT/bcrypt helpers, get_current_user, require_roles, all Pydantic models
+├── seed.py            # Idempotent seed_data() for demo users, depts, categories, assets
+├── storage.py         # Emergent object storage put/get + path builder
+├── emailer.py         # Resend email (async via asyncio.to_thread)
+├── scheduler.py       # Background overdue-reminder loop with per-day dedupe
+└── routers/
+    ├── auth.py        # register, login, logout, me, refresh, forgot/reset, Google OAuth session
+    ├── org.py         # users, departments, categories, promote
+    ├── assets.py      # CRUD + search + detail with allocation/maintenance history
+    ├── allocation.py  # allocate (with double-alloc guard), return, transfer (request/approve/reject)
+    ├── booking.py     # book (with overlap guard), cancel
+    ├── maintenance.py # create + Kanban move (auto asset-status sync)
+    ├── audit.py       # cycles: create, list, get, mark item, close (with mutations)
+    ├── uploads.py     # multipart upload + short-lived HMAC-signed URLs
+    └── dashboard.py   # stats, activity, notifications, manual overdue trigger, health
+```
 
-## What's Implemented (2026-07-12)
+### Frontend — React 19 + Tailwind + shadcn/ui
+- Dark theme, Cabinet Grotesk + Satoshi via Fontshare
+- AuthProvider (JWT httpOnly cookies + Emergent Google OAuth session cookies)
+- FileUploader + AuthedImage (cookie-authed fetch → blob URL)
+- Persistent left sidebar, top bar with global search
+- 10 screens (Login, Dashboard, Org Setup, Assets, Asset Detail, Allocation & Transfer, Booking, Maintenance Kanban, Audit, Reports, Notifications)
 
-### Phase 1 — Auth + RBAC + Dashboard + Org Setup — ✅
-- JWT register/login/logout/refresh/forgot/reset + Emergent Google OAuth session exchange
-- Brute-force lockout (5 attempts → 15 min, email-keyed)
-- Departments + Categories + Employees management with role promotion (Admin only)
-- Dashboard: 6 stat cards, overdue banner, activity feed, quick actions
+## Security & Access
+- JWT httpOnly cookies (SameSite=None, Secure) + bcrypt passwords
+- Brute-force lockout: 5 attempts / 15 min, keyed by email (ingress-safe)
+- RBAC middleware on every mutating route
+- File downloads: httpOnly cookie OR short-lived HMAC-signed URL (5 min TTL, base64url `<exp>.<sig>`) — old `?auth=<jwt>` query param removed
 
-### Phase 2 — Assets — ✅
-- Register asset with **Emergent object storage** photo + doc uploads (multi-file, drag-drop, previews)
-- Table with search/filters + detail page with photo gallery, docs, allocation/maintenance history
-
-### Phase 3 — Allocation & Transfer — ✅
-- Allocate with expected return · **Double-allocation guard** (409 + inline warning + auto-transfer path)
-- Transfer request/approve/reject with automatic allocation swap
-- Return check-in · Overdue tab + visual highlighting
-
-### Phase 4 — Resource Booking — ✅
-- 7-day timeline · **Server-side overlap validation** (booking_guard) · Cancel
-
-### Phase 5 — Maintenance Kanban — ✅
-- 5-column board with auto asset-status sync (Approve → under_maintenance, Resolve → available)
-
-### Phase 6 — Audit Cycles — ✅
-- Create cycle with dept/location scope + auditor assignments + asset snapshot
-- Checklist to mark verified/missing/damaged (RBAC: admins or assigned auditors)
-- Auto-generated discrepancy report
-- Close cycle applies mutations (missing → lost, damaged → under_maintenance) — idempotent
-
-### Phase 7 — Reports & Analytics — ✅
-- Utilization by department (bar)
-- Status distribution (pie)
-- Maintenance by priority (bar)
-- Allocation velocity (line, demo)
-- **Booking heatmap** (day × hour with intensity coloring)
-- Most-used vs idle assets
-- CSV export · **Client-side PDF export** (html2canvas + jsPDF)
-
-### Phase 8 — Notifications + Activity + Reminders — ✅
-- Unified notifications feed with mark-all-read
-- Activity log
-- **Background overdue scheduler** (hourly): fires in-app notifications + **Resend email** to each affected user, dedup'd per day
-- Manual `POST /api/overdue/check` trigger for admin/asset_manager
+## Integrations
+- **Emergent Google OAuth** — coexists with JWT login, unified user store
+- **Emergent-managed object storage** — via `storage.py`, 10 MB / file, MIME whitelist
+- **Resend email** — overdue-return reminders (best-effort, non-blocking)
 
 ## Testing
-- Iteration 1: 18/19 backend, all frontend passed — fixed brute-force + CORS
-- Iteration 2: 100% new-feature backend (uploads/audit/overdue/OAuth guard) + frontend audit flow — flagged missing FileUploader render
-- Iteration 3: focused retest — **all clean, zero issues**
+| Iteration | Focus | Result |
+|-----------|-------|--------|
+| 1 | Base MVP (phases 1–5) | 18/19 backend, all FE — fixed brute-force + CORS |
+| 2 | Uploads, audit, PDF, email | All new BE passed; FE flagged missing FileUploader render |
+| 3 | Retest of FileUploader fix | **All clean** |
+| 4 | Signed URLs + router split | **16/16 backend, all FE — zero issues** |
 
 ## Seed Credentials
 See `/app/memory/test_credentials.md`.
 
-## Backlog / Next Actions
-- **P1** — Verify Google OAuth end-to-end with real Google account on production URL (guard endpoint already tested)
-- **P2** — Split `server.py` (~1250 lines) into `routers/*.py` when the codebase grows
-- **P2** — Short-lived signed URLs for image auth (instead of ?auth=<jwt> query param)
-- **P2** — Booking recurring/reschedule
-- **P3** — SMS reminders via Twilio; PWA offline mode
+## Backlog
+- **P3** — Booking recurring/reschedule flow
+- **P3** — SMS reminders via Twilio
+- **P3** — Public asset "trust page" via QR code (contractors/students scan → view + report issue)
+- **P4** — Verified custom sending domain for Resend
+- **P4** — Delete/soft-delete of uploaded files (currently `is_deleted` flag never toggled)
