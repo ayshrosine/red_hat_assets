@@ -129,12 +129,14 @@ export default function Allocation() {
             )}
 
             <Tabs defaultValue="active">
-                <TabsList className="bg-white/[0.03] border border-white/10 p-1">
-                    <TabsTrigger value="active" className="data-[state=active]:bg-white data-[state=active]:text-black">Active ({activeAllocs.length})</TabsTrigger>
-                    <TabsTrigger value="overdue" className="data-[state=active]:bg-white data-[state=active]:text-black">Overdue ({overdueList.length})</TabsTrigger>
-                    <TabsTrigger value="transfers" className="data-[state=active]:bg-white data-[state=active]:text-black">Transfers ({pendingTransfers.length})</TabsTrigger>
-                    <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-black">All history</TabsTrigger>
-                </TabsList>
+                <div className="-mx-1 overflow-x-auto scrollbar-none">
+                    <TabsList className="bg-white/[0.03] border border-white/10 p-1 w-max">
+                        <TabsTrigger value="active" className="data-[state=active]:bg-white data-[state=active]:text-black">Active ({activeAllocs.length})</TabsTrigger>
+                        <TabsTrigger value="overdue" className="data-[state=active]:bg-white data-[state=active]:text-black">Overdue ({overdueList.length})</TabsTrigger>
+                        <TabsTrigger value="transfers" className="data-[state=active]:bg-white data-[state=active]:text-black">Transfers ({pendingTransfers.length})</TabsTrigger>
+                        <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:text-black">All history</TabsTrigger>
+                    </TabsList>
+                </div>
 
                 <TabsContent value="active" className="mt-6">
                     <AllocTable list={activeAllocs} onReturn={returnA} />
