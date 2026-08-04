@@ -1,0 +1,77 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Run tests
+        run: |
+          cd backend
+          pytest
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/assetflow-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/assetflow-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy job - requires OpenShift secrets to be configured
+  # Uncomment and configure when ready for automated deployment
+  # deploy:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install OpenShift CLI
+  #       run: |
+  #         curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
+  #         tar -xzf openshift-client-linux.tar.gz
+  #         sudo mv oc /usr/local/bin/
+  #     - name: Login to OpenShift
+  #       run: |
+  #         oc login --server=${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
+  #         oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
+  #     - name: Update backend deployment
+  #       run: |
+  #         oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
+  #         oc rollout status deployment/assetflow-backend
+  #     - name: Update frontend deployment
+  #       run: |
+  #         oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }}
+  #         oc rollout status deployment/assetflow-frontend

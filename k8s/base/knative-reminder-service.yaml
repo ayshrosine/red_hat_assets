@@ -1,0 +1,22 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: assetflow-reminder-job
+spec:
+  template:
+    spec:
+      containers:
+        - image: ghcr.io/ayshrosine/assetflow-backend:latest
+          command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+          envFrom:
+            - configMapRef:
+                name: assetflow-config
+            - secretRef:
+                name: assetflow-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

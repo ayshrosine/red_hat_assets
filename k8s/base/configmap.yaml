@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assetflow-config
+data:
+  DB_NAME: "assetflow"
+  CORS_ORIGINS: "*"
+  FRONTEND_URL: ""
+  BACKEND_URL: ""
+  ENV: "production"
+  GOOGLE_CLIENT_ID: ""

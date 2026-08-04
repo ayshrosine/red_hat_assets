@@ -1,0 +1,13 @@
+apiVersion: sources.knative.dev/v1
+kind: PingSource
+metadata:
+  name: reminder-cron
+spec:
+  schedule: "0 * * * *"
+  contentType: "application/json"
+  data: '{"trigger":"overdue-reminders"}'
+  sink:
+    ref:
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: assetflow-reminder-job

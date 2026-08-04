@@ -3,13 +3,12 @@ import os
 import asyncio
 import logging
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Response
 from starlette.middleware.cors import CORSMiddleware
 
 from deps import client, db, log, add_notification
 from storage import init_storage
 from emailer import send_email, overdue_email_html
-from scheduler import overdue_reminder_loop
 from seed import seed_data
 from routers import auth as auth_router
 from routers import org as org_router
@@ -20,6 +19,7 @@ from routers import maintenance as maintenance_router
 from routers import audit as audit_router
 from routers import uploads as uploads_router
 from routers import dashboard as dashboard_router
+from routers import jobs as jobs_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,6 +35,7 @@ api.include_router(maintenance_router.router)
 api.include_router(audit_router.router)
 api.include_router(uploads_router.router)
 api.include_router(dashboard_router.router)
+api.include_router(jobs_router.router)
 app.include_router(api)
 
 # ---------- CORS ----------
@@ -57,6 +58,30 @@ app.add_middleware(
 )
 
 
+# ---------- Health Probes ----------
+@app.get("/healthz")
+def liveness():
+    """Liveness probe - process is alive, no external calls"""
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readiness():
+    """Readiness probe - check database connection"""
+    try:
+        await db.command("ping")
+        return {"status": "ready"}
+    except Exception:
+        return Response(status_code=503, content='{"status":"not ready"}',
+                         media_type="application/json")
+
+
+@app.get("/startupz")
+async def startup():
+    """Startup probe - confirm application has started successfully"""
+    return {"status": "started"}
+
+
 @app.on_event("startup")
 async def on_startup():
     try:
@@ -68,8 +93,7 @@ async def on_startup():
         log.info("Object storage initialized")
     except Exception as e:
         log.warning("Object storage init failed (uploads will 500): %s", e)
-    asyncio.create_task(overdue_reminder_loop(db, add_notification, send_email, overdue_email_html, interval_seconds=3600))
-    log.info("Overdue reminder loop scheduled (hourly)")
+    log.info("Application started successfully")
 
 
 @app.on_event("shutdown")

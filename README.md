@@ -210,6 +210,89 @@ npm start                      # http://localhost:3000
 
 ---
 
+## OpenShift Deployment
+
+AssetFlow can be deployed to Red Hat OpenShift with containerization, CI/CD, and all enterprise features. See [OPENSHIFT_DEPLOYMENT.md](OPENSHIFT_DEPLOYMENT.md) for complete deployment guide.
+
+### Quick OpenShift Deployment
+
+```bash
+# Set environment variables
+export MONGO_URL="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>"
+export JWT_SECRET="<generate strong secret>"
+export GOOGLE_CLIENT_ID="<from Google Console>"
+export GOOGLE_CLIENT_SECRET="<from Google Console>"
+export ADMIN_PASSWORD="<demo-only>"
+export NAMESPACE="assetflow"
+
+# Build and push images to GitHub Container Registry
+cd backend
+docker build -t ghcr.io/<your-username>/assetflow-backend:latest .
+docker push ghcr.io/<your-username>/assetflow-backend:latest
+cd ../frontend
+docker build -t ghcr.io/<your-username>/assetflow-frontend:latest .
+docker push ghcr.io/<your-username>/assetflow-frontend:latest
+
+# Deploy to OpenShift
+oc login --server=<your-openshift-server> --token=<your-token>
+oc new-project $NAMESPACE
+oc create secret generic assetflow-secrets \
+  --from-literal=MONGO_URL="$MONGO_URL" \
+  --from-literal=JWT_SECRET="$JWT_SECRET" \
+  --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+  --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
+  --from-literal=ADMIN_PASSWORD="$ADMIN_PASSWORD"
+oc apply -k k8s/base
+oc set image deployment/assetflow-backend backend=ghcr.io/<your-username>/assetflow-backend:latest
+oc set image deployment/assetflow-frontend frontend=ghcr.io/<your-username>/assetflow-frontend:latest
+```
+
+### OpenShift Features
+
+- **Container Images**: Docker multi-stage builds for backend (Python) and frontend (React + Nginx)
+- **Health Probes**: Liveness, readiness, and startup probes for automatic healing
+- **Load Balancing**: OpenShift Routes with TLS termination
+- **Horizontal Pod Autoscaling**: CPU-based autoscaling (2-6 replicas)
+- **High Availability**: 3 backend replicas + 2 frontend replicas with rolling updates
+- **Security**: Secrets management, RBAC, NetworkPolicies, TLS encryption
+- **Persistent Storage**: PVC for file uploads (MongoDB remains on Atlas)
+- **Serverless**: Knative Service for scheduled overdue reminder jobs
+- **CI/CD**: GitHub Actions workflow for automated build, test, and deployment
+- **Monitoring**: OpenShift Observe integration for metrics and logs
+
+### Project Structure for OpenShift
+
+```
+AssetFlow/
+├── k8s/base/                      # Kubernetes manifests
+│   ├── backend-deployment.yaml
+│   ├── backend-service.yaml
+│   ├── backend-route.yaml
+│   ├── backend-hpa.yaml
+│   ├── backend-pdb.yaml
+│   ├── frontend-deployment.yaml
+│   ├── frontend-service.yaml
+│   ├── frontend-route.yaml
+│   ├── configmap.yaml
+│   ├── secret-template.yaml
+│   ├── rbac.yaml
+│   ├── networkpolicy.yaml
+│   ├── pvc-uploads.yaml
+│   ├── knative-reminder-service.yaml
+│   ├── knative-ping-source.yaml
+│   └── kustomization.yaml
+├── .github/workflows/             # CI/CD pipeline
+│   └── ci-cd.yaml
+├── scripts/                       # Deployment scripts
+│   ├── deploy-openshift.sh
+│   └── local-test.sh
+├── backend/Dockerfile
+├── frontend/Dockerfile
+└── OPENSHIFT_DEPLOYMENT.md
+```
+
+---
+
 ## Seeded Demo Credentials
 
 Automatically created by `backend/seed.py` on backend startup (works in both preview and production deployments):

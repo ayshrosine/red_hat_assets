@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: assetflow-backend-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: assetflow-pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: assetflow-backend-binding
+subjects:
+  - kind: ServiceAccount
+    name: assetflow-backend-sa
+roleRef:
+  kind: Role
+  name: assetflow-pod-reader
+  apiGroup: rbac.authorization.k8s.io

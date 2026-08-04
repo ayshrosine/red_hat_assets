@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: assetflow-backend
+  labels:
+    app: assetflow-backend
+spec:
+  selector:
+    app: assetflow-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

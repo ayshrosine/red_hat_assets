@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - backend-route.yaml
+  - backend-hpa.yaml
+  - backend-pdb.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - frontend-route.yaml
+  - configmap.yaml
+  - rbac.yaml
+  - networkpolicy.yaml
+  - pvc-uploads.yaml
+  - knative-reminder-service.yaml
+  - knative-ping-source.yaml
+
+# Secret is created separately via command line to avoid committing sensitive data
