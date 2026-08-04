@@ -4,16 +4,16 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy package files
-COPY package.json ./
+COPY package.json yarn.lock ./
 
-# Install dependencies using npm
-RUN npm install
+# Install dependencies using Yarn
+RUN yarn install --frozen-lockfile
 
 # Copy application code
 COPY . .
 
 # Build the React application
-RUN npm run build
+RUN yarn build
 
 # Production stage
 FROM nginx:1.27-alpine
