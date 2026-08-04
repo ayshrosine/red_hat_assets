@@ -19,11 +19,6 @@ export function AuthProvider({ children }) {
     }, []);
 
     useEffect(() => {
-        // If returning from OAuth callback, let AuthCallback handle it first
-        if (window.location.hash?.includes("session_id=")) {
-            setLoading(false);
-            return;
-        }
         checkAuth();
     }, [checkAuth]);
 
@@ -54,6 +49,16 @@ export function AuthProvider({ children }) {
         setUser(false);
     };
 
+    const googleLogin = async (idToken) => {
+        try {
+            const { data } = await api.post("/auth/google/token", { id_token: idToken });
+            setUser(data);
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, error: formatApiError(e) };
+        }
+    };
+
     const refresh = async () => {
         try {
             const { data } = await api.get("/auth/me");
@@ -64,7 +69,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthCtx.Provider value={{ user, loading, login, register, logout, checkAuth, refresh, setUser }}>
+        <AuthCtx.Provider value={{ user, loading, login, register, logout, checkAuth, refresh, setUser, googleLogin }}>
             {children}
         </AuthCtx.Provider>
     );

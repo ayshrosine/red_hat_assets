@@ -5,15 +5,16 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 import jwt
-import httpx
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from deps import (
     db, JWT_SECRET, JWT_ALGORITHM, ACCESS_MIN,
     now_utc, iso, new_id, hash_password, verify_password,
     create_access_token, create_refresh_token, set_auth_cookies, clear_auth_cookies,
     clean_user, get_current_user,
-    RegisterIn, LoginIn, ForgotIn, ResetIn, GoogleSessionIn,
+    RegisterIn, LoginIn, ForgotIn, ResetIn, GoogleTokenIn,
 )
 
 log = logging.getLogger("assetflow.auth")
@@ -129,41 +130,55 @@ async def reset_password(payload: ResetIn):
     return {"ok": True}
 
 
-@router.post("/google/session")
-async def google_session(payload: GoogleSessionIn, response: Response):
-    async with httpx.AsyncClient(timeout=15) as httpc:
-        r = await httpc.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": payload.session_id},
+@router.post("/google/token")
+async def google_token(payload: GoogleTokenIn, response: Response):
+    try:
+        # Verify Google ID token
+        google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
+        if not google_client_id:
+            raise HTTPException(status_code=500, detail="Google Client ID not configured")
+        
+        # Verify the ID token using Google's verification
+        idinfo = id_token.verify_oauth2_token(
+            payload.id_token, 
+            google_requests.Request(), 
+            google_client_id
         )
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    data = r.json()
-    email = data["email"].lower().strip()
-    session_token = data["session_token"]
-    existing = await db.users.find_one({"email": email})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {
-            "name": data.get("name") or existing.get("name"),
-            "avatar": data.get("picture") or existing.get("avatar", ""),
-        }})
-    else:
-        user_id = new_id("usr")
-        await db.users.insert_one({
-            "user_id": user_id, "email": email,
-            "name": data.get("name", email.split("@")[0]),
-            "avatar": data.get("picture", ""),
-            "role": "employee", "department_id": None,
-            "auth_provider": "google", "created_at": iso(now_utc()),
-        })
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": now_utc() + timedelta(days=7), "created_at": iso(now_utc()),
-    })
-    is_dev = os.environ.get("ENV", "development") == "development"
-    secure_cookie = not is_dev
-    samesite_policy = "lax" if is_dev else "none"
-    response.set_cookie("session_token", session_token, httponly=True, secure=secure_cookie, samesite=samesite_policy, max_age=7 * 86400, path="/")
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return clean_user(user)
+        
+        # Get user info from verified token
+        email = idinfo.get("email").lower().strip()
+        name = idinfo.get("name", email.split("@")[0])
+        picture = idinfo.get("picture", "")
+        
+        # Check if user exists
+        existing = await db.users.find_one({"email": email})
+        if existing:
+            user_id = existing["user_id"]
+            # Update user profile with latest Google data
+            await db.users.update_one({"user_id": user_id}, {"$set": {
+                "name": name,
+                "avatar": picture,
+            }})
+        else:
+            # Create new user
+            user_id = new_id("usr")
+            await db.users.insert_one({
+                "user_id": user_id, 
+                "email": email,
+                "name": name,
+                "avatar": picture,
+                "role": "employee", 
+                "department_id": None,
+                "auth_provider": "google", 
+                "created_at": iso(now_utc()),
+            })
+        
+        # Create session and set auth cookies
+        set_auth_cookies(response, create_access_token(user_id, email), create_refresh_token(user_id))
+        
+        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        return clean_user(user)
+        
+    except Exception as e:
+        log.error(f"Google token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid Google token")

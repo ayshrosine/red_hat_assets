@@ -8,9 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ArrowRight, Sparkles, Boxes, Shield, Activity } from "lucide-react";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+
+function GoogleG() {
+    return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#4285F4"/>
+            <path d="M12 22C15.5 22 18.5 20.5 20.5 18V12H12V16H16.5C16.1 17.9 14.4 19.2 12 19.2C9.1 19.2 6.7 17.1 6.2 14.2H2.1C2.7 18.6 6.9 22 12 22Z" fill="#34A853"/>
+            <path d="M19.8 10.6C19.9 10.1 20 9.5 20 9C20 8.5 19.9 7.9 19.8 7.4H12V11.4H16.4C16.2 12.5 15.7 13.4 15 14.1L18.3 16.6C19.3 15.2 20 13.2 20 11H19.8V10.6Z" fill="#FBBC05"/>
+            <path d="M5.5 13.8C5.2 12.9 5 11.9 5 11C5 10.1 5.2 9.1 5.5 8.2V4.8H2.1C1.4 6.4 1 8.2 1 11C1 13.8 1.4 15.6 2.1 17.2L5.5 13.8Z" fill="#EA4335"/>
+        </svg>
+    );
+}
 
 export default function LoginPage() {
-    const { user, login, register } = useAuth();
+    const { user, login, register, googleLogin } = useAuth();
     const nav = useNavigate();
     const [mode, setMode] = useState("login"); // login | register | forgot
     const [email, setEmail] = useState("");
@@ -18,6 +30,7 @@ export default function LoginPage() {
     const [name, setName] = useState("");
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
+    const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
     if (user) return <Navigate to="/dashboard" replace />;
 
@@ -47,10 +60,19 @@ export default function LoginPage() {
         }
     };
 
-    const google = () => {
-        // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-        const redirectUrl = window.location.origin + "/dashboard";
-        window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    const handleGoogleSuccess = async (credentialResponse) => {
+        const idToken = credentialResponse.credential;
+        const result = await googleLogin(idToken);
+        if (result.ok) {
+            toast.success("Welcome back");
+            nav("/dashboard");
+        } else {
+            setErr(result.error);
+        }
+    };
+
+    const handleGoogleError = () => {
+        toast.error("Google sign-in failed");
     };
 
     return (
@@ -204,15 +226,30 @@ export default function LoginPage() {
                                     <span className="text-[10px] uppercase tracking-[0.2em] text-white/40">or</span>
                                     <div className="flex-1 h-px bg-white/5" />
                                 </div>
-                                <button
-                                    type="button"
-                                    data-testid={AUTH.googleButton}
-                                    onClick={google}
-                                    className="w-full h-11 rounded-md border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors flex items-center justify-center gap-2.5 text-sm"
-                                >
-                                    <GoogleG />
-                                    Continue with Google
-                                </button>
+                                {googleClientId ? (
+                                    <GoogleOAuthProvider clientId={googleClientId}>
+                                        <GoogleLogin
+                                            onSuccess={handleGoogleSuccess}
+                                            onError={handleGoogleError}
+                                            type="standard"
+                                            theme="outline"
+                                            size="large"
+                                            text="continue_with"
+                                            shape="rectangular"
+                                            logo_alignment="left"
+                                            width="100%"
+                                        />
+                                    </GoogleOAuthProvider>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        data-testid={AUTH.googleButton}
+                                        className="w-full h-11 rounded-md border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors flex items-center justify-center gap-2.5 text-sm"
+                                    >
+                                        <GoogleG />
+                                        Continue with Google
+                                    </button>
+                                )}
                             </>
                         )}
 
@@ -248,13 +285,5 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
-    );
-}
-
-function GoogleG() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 24 24">
-            <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.4-1.7 4-5.5 4-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.5C16.9 3.3 14.7 2.3 12 2.3 6.5 2.3 2 6.8 2 12.3s4.5 10 10 10c5.8 0 9.6-4.1 9.6-9.8 0-.7-.1-1.2-.2-1.7H12z" />
-        </svg>
     );
 }

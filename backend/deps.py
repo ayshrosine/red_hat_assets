@@ -187,8 +187,8 @@ class ResetIn(BaseModel):
     new_password: str = Field(min_length=6)
 
 
-class GoogleSessionIn(BaseModel):
-    session_id: str
+class GoogleTokenIn(BaseModel):
+    id_token: str
 
 
 class PromoteIn(BaseModel):

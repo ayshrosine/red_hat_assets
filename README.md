@@ -19,8 +19,9 @@ Live On :- https://deploy-launch-10.emergent.host
 | Frontend       | React (Create React App) |
 | Backend        | FastAPI (Python) |
 | Database       | MongoDB |
-| Package manager (frontend) | Yarn |
+| Package manager (frontend) | npm |
 | Package manager (backend)  | pip / requirements.txt |
+| Authentication | Email/Password + Google OAuth (@react-oauth/google, google-auth) |
 | Scheduled jobs | Custom in-process loop (`scheduler.py`) — see [Known Issues](#known-issues) for the production caveat |
 | File uploads   | Handled via `storage.py` |
 | Email          | Handled via `emailer.py` |
@@ -55,6 +56,7 @@ AssetFlow/
 │   ├── public/                   # Static assets, index.html
 │   ├── src/
 │   │   ├── components/           # Reusable UI components
+│   │   ├── context/              # React Context providers (AuthContext, etc.)
 │   │   ├── pages/                # Screen-level views (Dashboard, Assets, Booking, etc.)
 │   │   ├── App.js                # Root component / routing
 │   │   └── index.js               # Entry point
@@ -110,7 +112,7 @@ Roles are assigned **only** by an Admin via the Employee Directory — never sel
 
 ## Screens / Features
 
-1. **Login / Signup** — email/password + Google sign-in; signup creates an Employee-only account
+1. **Login / Signup** — email/password + Google OAuth sign-in; signup creates an Employee-only account
 2. **Dashboard** — KPI cards, overdue-returns banner, quick actions, recent activity
 3. **Organization Setup** (Admin only) — Departments, Asset Categories, Employee Directory (role promotion)
 4. **Asset Registration & Directory** — register assets, search/filter, per-asset history
@@ -125,9 +127,10 @@ Roles are assigned **only** by an Admin via the Employee Directory — never sel
 
 ## Prerequisites
 
-- **Python 3.12** (for the backend — confirm against `backend/requirements.txt`)
-- **Node.js** + **Yarn** (for the frontend)
+- **Python 3.11+** (for the backend — confirm against `backend/requirements.txt`)
+- **Node.js** + **npm** (for the frontend)
 - **MongoDB** — local instance or a hosted cluster (e.g. MongoDB Atlas)
+- **Google Cloud Console Project** (for Google OAuth - optional but recommended)
 
 ---
 
@@ -135,20 +138,36 @@ Roles are assigned **only** by an Admin via the Employee Directory — never sel
 
 ### `backend/.env`
 
-| Variable | Description |
-|---|---|
-| `MONGO_URL` | MongoDB connection string |
-| `DB_NAME` | Database name (if used separately from the connection string) |
-| `CORS_ORIGINS` | Allowed frontend origin(s) for CORS |
-| SMTP-related vars | Used by `emailer.py` for sending overdue-reminder and notification emails |
+| Variable | Description | Required |
+|---|---|---|
+| `MONGO_URL` | MongoDB connection string (local or Atlas) | Yes |
+| `DB_NAME` | Database name | Yes |
+| `JWT_SECRET` | Secret key for JWT token signing | Yes |
+| `CORS_ORIGINS` | Allowed frontend origin(s) for CORS (comma-separated) | Yes |
+| `FRONTEND_URL` | Frontend URL for CORS and cookie settings | Yes |
+| `ENV` | Environment mode (`development` or `production`) | No (defaults to development) |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID for Google sign-in | Yes (for Google OAuth) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret | Yes (for Google OAuth) |
+| `ADMIN_EMAIL` | Admin email for seeding demo data | Yes |
+| `ADMIN_PASSWORD` | Admin password for seeding demo data | Yes |
+| `EMERGENT_LLM_KEY` | API key for LLM integrations (optional) | No |
+| `RESEND_API_KEY` | Resend API key for email sending | No |
+| `SENDER_EMAIL` | Sender email for Resend | No |
+| `APP_NAME` | Application name | No |
 
 ### `frontend/.env`
 
-| Variable | Description |
-|---|---|
-| `REACT_APP_BACKEND_URL` | Base URL the frontend uses to call the backend API |
+| Variable | Description | Required |
+|---|---|---|
+| `REACT_APP_BACKEND_URL` | Base URL the frontend uses to call the backend API | Yes |
+| `REACT_APP_GOOGLE_CLIENT_ID` | Google OAuth Client ID for Google sign-in | Yes (for Google OAuth) |
 
-> Check `deps.py` and `emailer.py` directly for the exact variable names your local `.env` needs — names above are inferred from usage patterns and should be confirmed against source.
+### Environment Setup Notes
+
+- **Development Mode**: Set `ENV=development` for local development (uses HTTP cookies)
+- **Production Mode**: Set `ENV=production` for production (uses HTTPS cookies)
+- **Cookie Security**: Cookie settings automatically adjust based on `ENV` variable
+- **Google OAuth**: Requires Google Cloud Console project with OAuth 2.0 Client ID configured
 
 ---
 
@@ -164,15 +183,29 @@ cd backend
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env            # fill in MONGO_URL, etc.
+# Create .env file with required variables (see Environment Variables section)
+# Example backend/.env:
+# MONGO_URL=mongodb+srv://your-connection-string
+# DB_NAME=assetflow
+# JWT_SECRET=your-secret-key
+# CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+# FRONTEND_URL=http://localhost:3000
+# ENV=development
+# GOOGLE_CLIENT_ID=your-google-client-id
+# GOOGLE_CLIENT_SECRET=your-google-client-secret
+# ADMIN_EMAIL=admin@assetflow.io
+# ADMIN_PASSWORD=admin123
 python seed.py                  # seeds demo data + default credentials
-uvicorn server:app --reload     # http://localhost:8000/docs
+uvicorn server:app --reload --host 0.0.0.0 --port 8000     # http://localhost:8000/docs
 
 # --- Frontend (new terminal) ---
 cd ../frontend
-yarn install
-cp .env.example .env            # set REACT_APP_BACKEND_URL=http://localhost:8000
-yarn start                      # http://localhost:3000
+npm install
+# Create .env file with required variables
+# Example frontend/.env:
+# REACT_APP_BACKEND_URL=http://localhost:8000
+# REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id
+npm start                      # http://localhost:3000
 ```
 
 ---
@@ -192,10 +225,75 @@ Automatically created by `backend/seed.py` on backend startup (works in both pre
 
 ---
 
+## Recent Changes & Updates
+
+### Google OAuth Integration (2026-08-05)
+
+**What Changed:**
+- Implemented direct Google OAuth authentication using `@react-oauth/google` (frontend) and `google-auth` (backend)
+- Removed dependency on external OAuth service (auth.emergentagent.com)
+- Updated authentication flow to use Google ID token verification on backend
+- Modified cookie settings to work with HTTP (development) and HTTPS (production)
+
+**Technical Implementation:**
+- **Frontend**: 
+  - Added `@react-oauth/google` package for Google OAuth popup flow
+  - Replaced external OAuth button with GoogleLogin component
+  - Added `googleLogin` function to AuthContext for token handling
+  - Removed AuthCallback page (no longer needed)
+- **Backend**:
+  - Added `google-auth` library for ID token verification
+  - Replaced `/api/auth/google/session` endpoint with `/api/auth/google/token`
+  - Implemented Google ID token verification using Google Auth Library
+  - Updated input models from `GoogleSessionIn` to `GoogleTokenIn`
+- **Configuration**:
+  - Added `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to backend .env
+  - Added `REACT_APP_GOOGLE_CLIENT_ID` to frontend .env
+  - Added `ENV` variable for development/production mode switching
+  - Updated cookie security settings based on environment
+
+**Authentication Flow:**
+1. User clicks "Continue with Google" button
+2. Google OAuth popup opens for authentication
+3. User authorizes the application
+4. Frontend receives Google ID token
+5. Frontend sends token to backend `/api/auth/google/token`
+6. Backend verifies token with Google Auth Library
+7. User is created/updated and logged in
+8. User redirected to dashboard
+
+**Benefits:**
+- No external OAuth service dependency
+- More secure (backend token verification)
+- Better user experience (popup flow)
+- Works with both development and production environments
+
+### Cookie Security Update (2026-08-05)
+
+**What Changed:**
+- Updated cookie settings to work with HTTP (development) and HTTPS (production)
+- Added `ENV` environment variable to control cookie security settings
+- Modified `set_auth_cookies` and `clear_auth_cookies` functions in deps.py
+- Updated refresh token and session token cookie settings in auth.py
+
+**Cookie Configuration:**
+- **Development** (`ENV=development`): `secure=False`, `samesite="lax"`
+- **Production** (`ENV=production`): `secure=True`, `samesite="none"`
+
+### Database Connection Update (2026-08-05)
+
+**What Changed:**
+- Updated MongoDB connection string from local MongoDB to MongoDB Atlas
+- Configured `MONGO_URL` with MongoDB Atlas connection string
+- Updated backend configuration to use hosted MongoDB database
+
+---
+
 ## Known Issues
 
 - **`scheduler.py`'s `overdue_reminder_loop`** runs as an in-process background loop, which does not persist on serverless platforms like Vercel (functions don't stay alive between requests). For production, convert this to a scheduled HTTP endpoint triggered by a cron job (e.g. Vercel Cron) instead of an in-process `asyncio` loop.
 - **`emergentintegrations` dependency**: `backend/requirements.txt` may reference a package (`emergentintegrations`) that is private to the Emergent build sandbox and unavailable on public PyPI. Replace usages with the underlying library directly (commonly `litellm`) before deploying outside Emergent.
+- **Google OAuth in Development**: Google OAuth requires HTTPS in production but works with HTTP in development mode. Ensure proper environment configuration (`ENV=development` vs `ENV=production`).
 
 ---
 

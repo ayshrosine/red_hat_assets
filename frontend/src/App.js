@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "sonner";
 import Layout from "@/components/Layout";
 import LoginPage from "@/pages/Login";
-import AuthCallback from "@/pages/AuthCallback";
 import Dashboard from "@/pages/Dashboard";
 import OrgSetup from "@/pages/OrgSetup";
 import Assets from "@/pages/Assets";
@@ -37,11 +36,6 @@ function LoadingSplash() {
 }
 
 function AppRouter() {
-    const loc = useLocation();
-    // Synchronous session_id detection to avoid race with checkAuth
-    if (loc.hash?.includes("session_id=")) {
-        return <AuthCallback />;
-    }
     return (
         <Routes>
             <Route path="/login" element={<LoginPage />} />
