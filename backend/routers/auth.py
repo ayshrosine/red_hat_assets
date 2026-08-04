@@ -91,8 +91,11 @@ async def refresh_token(request: Request, response: Response):
     user = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    is_dev = os.environ.get("ENV", "development") == "development"
+    secure_cookie = not is_dev
+    samesite_policy = "lax" if is_dev else "none"
     response.set_cookie("access_token", create_access_token(user["user_id"], user["email"]),
-                        httponly=True, secure=True, samesite="none", max_age=ACCESS_MIN * 60, path="/")
+                        httponly=True, secure=secure_cookie, samesite=samesite_policy, max_age=ACCESS_MIN * 60, path="/")
     return {"ok": True}
 
 
@@ -158,6 +161,9 @@ async def google_session(payload: GoogleSessionIn, response: Response):
         "user_id": user_id, "session_token": session_token,
         "expires_at": now_utc() + timedelta(days=7), "created_at": iso(now_utc()),
     })
-    response.set_cookie("session_token", session_token, httponly=True, secure=True, samesite="none", max_age=7 * 86400, path="/")
+    is_dev = os.environ.get("ENV", "development") == "development"
+    secure_cookie = not is_dev
+    samesite_policy = "lax" if is_dev else "none"
+    response.set_cookie("session_token", session_token, httponly=True, secure=secure_cookie, samesite=samesite_policy, max_age=7 * 86400, path="/")
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return clean_user(user)

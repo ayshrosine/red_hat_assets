@@ -70,14 +70,22 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie("access_token", access, httponly=True, secure=True, samesite="none", max_age=ACCESS_MIN * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=True, samesite="none", max_age=REFRESH_DAYS * 86400, path="/")
+    # Use secure=False for HTTP development, secure=True for HTTPS production
+    is_dev = os.environ.get("ENV", "development") == "development"
+    secure_cookie = not is_dev
+    samesite_policy = "lax" if is_dev else "none"
+    
+    response.set_cookie("access_token", access, httponly=True, secure=secure_cookie, samesite=samesite_policy, max_age=ACCESS_MIN * 60, path="/")
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=secure_cookie, samesite=samesite_policy, max_age=REFRESH_DAYS * 86400, path="/")
 
 
 def clear_auth_cookies(response: Response):
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
-    response.delete_cookie("session_token", path="/")
+    is_dev = os.environ.get("ENV", "development") == "development"
+    samesite_policy = "lax" if is_dev else "none"
+    
+    response.delete_cookie("access_token", path="/", samesite=samesite_policy)
+    response.delete_cookie("refresh_token", path="/", samesite=samesite_policy)
+    response.delete_cookie("session_token", path="/", samesite=samesite_policy)
 
 
 def clean_user(u: dict) -> dict:
