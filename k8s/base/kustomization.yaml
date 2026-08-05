@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - backend-deployment.yaml
+  - backend-storage-demo-deployment.yaml
   - backend-service.yaml
   - backend-route.yaml
   - backend-hpa.yaml
