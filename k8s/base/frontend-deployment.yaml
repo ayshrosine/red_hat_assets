@@ -19,6 +19,7 @@ spec:
       labels:
         app: assetflow-frontend
     spec:
+      serviceAccountName: default
       containers:
         - name: frontend
           image: ghcr.io/ayshrosine/assetflow-frontend:latest
