@@ -53,6 +53,7 @@ jobs:
           build-args: |
             REACT_APP_GOOGLE_CLIENT_ID=476695638803-koraf2kepmg2i4h6s19nkpra2r22nm6s.apps.googleusercontent.com
             REACT_APP_BACKEND_URL=https://assetflow-backend-ayshrosine-dev.apps.rm1.0a51.p1.openshiftapps.com
+          no-cache: true
 
   # Deploy job - requires OpenShift secrets to be configured
   deploy:
@@ -68,12 +69,11 @@ jobs:
         run: |
           oc login --server=${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
           oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
-      # Backend deployment skipped - already operational
-      # - name: Update backend deployment
-      #   run: |
-      #     oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
-      #     oc rollout status deployment/assetflow-backend
+      - name: Update backend deployment
+        run: |
+          oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:latest
+          oc rollout status deployment/assetflow-backend
       - name: Update frontend deployment
         run: |
-          oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }}
+          oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:latest
           oc rollout status deployment/assetflow-frontend
