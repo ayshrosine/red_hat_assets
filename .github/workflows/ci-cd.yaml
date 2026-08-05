@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # Test job - currently integration tests require frontend environment
   # Skipping for CI/CD build and deploy focus
@@ -36,7 +40,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ayshrosine
+          username: ${{ github.actor }}
           password: ${{ secrets.GHCR_TOKEN }}
       - name: Build and push backend image
         uses: docker/build-push-action@v5
