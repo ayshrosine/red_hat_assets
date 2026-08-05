@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "sonner";
 import Layout from "@/components/Layout";
 import LoginPage from "@/pages/Login";
-import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import OrgSetup from "@/pages/OrgSetup";
 import Assets from "@/pages/Assets";
@@ -40,7 +39,7 @@ function AppRouter() {
     return (
         <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
             <Route path="/organization" element={<Protected roles={["admin"]}><OrgSetup /></Protected>} />
             <Route path="/assets" element={<Protected><Assets /></Protected>} />
@@ -51,7 +50,7 @@ function AppRouter() {
             <Route path="/audit" element={<Protected roles={["admin", "asset_manager"]}><Audit /></Protected>} />
             <Route path="/reports" element={<Protected roles={["admin", "asset_manager"]}><Reports /></Protected>} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
     );
 }
