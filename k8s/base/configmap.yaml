@@ -8,3 +8,4 @@ data:
   FRONTEND_URL: "https://assetflow-frontend-ayshrosine-dev.apps.rm1.0a51.p1.openshiftapps.com"
   BACKEND_URL: "http://assetflow-backend:8000"
   ENV: "production"
+  GOOGLE_CLIENT_ID: "476695638803-koraf2kepmg2i4h6s19nkpra2r22nm6s.apps.googleusercontent.com"
