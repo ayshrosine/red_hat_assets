@@ -26,8 +26,6 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: REACT_APP_BACKEND_URL
-              value: "http://assetflow-backend:8000"
             - name: REACT_APP_GOOGLE_CLIENT_ID
               valueFrom:
                 configMapKeyRef:

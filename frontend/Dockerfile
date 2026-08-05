@@ -3,6 +3,10 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
+# Build arguments for environment variables
+ARG REACT_APP_GOOGLE_CLIENT_ID
+ARG REACT_APP_BACKEND_URL
+
 # Copy package files
 COPY package.json yarn.lock ./
 
@@ -11,6 +15,10 @@ RUN yarn install --frozen-lockfile
 
 # Copy application code
 COPY . .
+
+# Set environment variables for build
+ENV REACT_APP_GOOGLE_CLIENT_ID=${REACT_APP_GOOGLE_CLIENT_ID}
+ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
 
 # Build the React application
 RUN yarn build
