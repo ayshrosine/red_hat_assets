@@ -69,10 +69,11 @@ jobs:
         run: |
           oc login --server=${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
           oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
-      - name: Update backend deployment
-        run: |
-          oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
-          oc rollout status deployment/assetflow-backend
+      # Backend deployment skipped - already operational
+      # - name: Update backend deployment
+      #   run: |
+      #     oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
+      #     oc rollout status deployment/assetflow-backend
       - name: Update frontend deployment
         run: |
           oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }}
