@@ -55,10 +55,4 @@ spec:
               port: 8000
             failureThreshold: 30
             periodSeconds: 5
-          volumeMounts:
-            - name: uploads
-              mountPath: /app/uploads
-      volumes:
-        - name: uploads
-          persistentVolumeClaim:
-            claimName: assetflow-uploads-pvc
+
