@@ -114,3 +114,8 @@ jobs:
           oc rollout undo deployment/assetflow-backend
           oc rollout undo deployment/assetflow-frontend
           echo "Rollback completed"
+      - name: Cleanup failed pods
+        if: failure()
+        run: |
+          echo "Cleaning up failed pods..."
+          oc delete pods --field-selector=status.phase=Failed

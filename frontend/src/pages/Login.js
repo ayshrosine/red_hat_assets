@@ -21,7 +21,6 @@ function GoogleG() {
     );
 }
 
-// Updated for deployment with green gradient colors
 export default function LoginPage() {
     const { user, login, register, googleLogin } = useAuth();
     const nav = useNavigate();
