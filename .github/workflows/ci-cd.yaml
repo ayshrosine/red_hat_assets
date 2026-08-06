@@ -47,21 +47,30 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/assetflow-backend:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/assetflow-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/assetflow-frontend:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/assetflow-frontend:latest
           build-args: |
             REACT_APP_GOOGLE_CLIENT_ID=476695638803-koraf2kepmg2i4h6s19nkpra2r22nm6s.apps.googleusercontent.com
             REACT_APP_BACKEND_URL=https://assetflow-backend-ayshrosine-dev.apps.rm1.0a51.p1.openshiftapps.com
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # Deploy job - requires OpenShift secrets to be configured
   deploy:
     runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenShift CLI
@@ -69,15 +78,39 @@ jobs:
           curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
           tar -xzf openshift-client-linux.tar.gz
           sudo mv oc /usr/local/bin/
+          oc version
       - name: Login to OpenShift
         run: |
+          echo "Logging into OpenShift..."
           oc login --server=${{ secrets.OPENSHIFT_SERVER }} --token=${{ secrets.OPENSHIFT_TOKEN }} --insecure-skip-tls-verify=true
           oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
+          echo "Successfully logged into OpenShift project: ${{ secrets.OPENSHIFT_NAMESPACE }}"
       - name: Update backend deployment
         run: |
-          oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:latest
-          oc rollout status deployment/assetflow-backend
+          echo "Updating backend deployment..."
+          oc set image deployment/assetflow-backend backend=ghcr.io/${{ github.repository_owner }}/assetflow-backend:${{ github.sha }}
+          oc rollout status deployment/assetflow-backend --timeout=5m
+          echo "Backend deployment updated successfully"
       - name: Update frontend deployment
         run: |
-          oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:latest
-          oc rollout status deployment/assetflow-frontend
+          echo "Updating frontend deployment..."
+          oc set image deployment/assetflow-frontend frontend=ghcr.io/${{ github.repository_owner }}/assetflow-frontend:${{ github.sha }}
+          oc rollout status deployment/assetflow-frontend --timeout=5m
+          echo "Frontend deployment updated successfully"
+      - name: Verify deployments
+        run: |
+          echo "Current deployments:"
+          oc get deployments
+          echo "Current pods:"
+          oc get pods
+          echo "Backend image:"
+          oc describe deployment assetflow-backend | grep Image
+          echo "Frontend image:"
+          oc describe deployment assetflow-frontend | grep Image
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          oc rollout undo deployment/assetflow-backend
+          oc rollout undo deployment/assetflow-frontend
+          echo "Rollback completed"
